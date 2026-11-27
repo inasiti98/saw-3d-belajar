@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Belajar SAW dalam 3D: Memilih Supplier Biji Kopi</title>
+<style>
+:root{--bg:#f6f4ef;--fg:#1f2430;--card:#ffffff;--line:#d9d5ca;--muted:#5d6574;--accent:#2a7f6f;--bad:#b3402a;--ok:#237a4b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171d;--fg:#e8eaef;--card:#1d222b;--line:#323a47;--muted:#a3abba;--accent:#4fc1ab;--bad:#ff8a72;--ok:#6fd9a0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14171d;--fg:#e8eaef;--card:#1d222b;--line:#323a47;--muted:#a3abba;--accent:#4fc1ab;--bad:#ff8a72;--ok:#6fd9a0;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2rem 0}
+.sub{color:var(--muted);margin:0 0 12px}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.steps button{border:1px solid var(--line);background:var(--card);color:var(--fg);padding:8px 12px;border-radius:999px;cursor:pointer;font:inherit;font-size:.9rem}
+.steps button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.scroll{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.seg button{border:1px solid var(--line);background:transparent;color:var(--fg);padding:5px 10px;cursor:pointer;font:inherit}
+.seg button:first-child{border-radius:8px 0 0 8px}.seg button:last-child{border-radius:0 8px 8px 0}
+.seg button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}
+.fb{font-size:.88rem;margin:4px 0 0}.fb.bad{color:var(--bad)}.fb.ok{color:var(--ok)}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:8px 14px;font:inherit;cursor:pointer}
+input[type=range]{width:100%}
+input[type=number],textarea,select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+textarea{width:100%;min-height:70px}
+#stage{position:relative;width:100%;height:380px;border-radius:12px;background:linear-gradient(var(--card),var(--bg));touch-action:none;cursor:grab;overflow:hidden}
+#stage canvas{display:block;width:100%;height:100%}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:.8rem;margin-top:8px;color:var(--muted)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.note{font-size:.85rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Belajar SAW dalam 3D: Memilih Supplier Biji Kopi</h1>
+<p class="sub">Sistem Pendukung Keputusan (SI214705) · Sub-CPMK-3 · IP-5 dan IP-6. Seret model 3D untuk memutarnya.</p>
+<div class="steps" id="steps"></div>
+<div class="grid">
+  <div class="card" id="panel"></div>
+  <div class="card">
+    <div id="stage"></div>
+    <div class="legend" id="legend"></div>
+    <p class="note">Tinggi menara = nilai preferensi V. Tiap warna adalah kontribusi satu kriteria (bobot × nilai ternormalisasi).</p>
+  </div>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var names=["A1 Tani Jaya","A2 Kopi Priangan","A3 Lembang Roast","A4 Gunung Puntang"];
+var crit=["Harga (ribu Rp/kg)","Kualitas (skor 0–100)","Waktu kirim (hari)","Reputasi (skala 1–5)"];
+var X=[[85,80,3,4],[95,90,5,5],[80,70,2,3],[90,85,4,4]];
+var key=["cost","benefit","cost","benefit"];
+var hints=["Jika harga naik, apakah supplier menjadi lebih menarik bagi UMKM?","Jika skor kualitas naik, apakah kopi menjadi lebih diinginkan?","Jika pengiriman makin lama, apakah stok kedai makin aman?","Jika reputasi makin tinggi, apakah supplier makin dipercaya?"];
+var colors=["#E76F51","#2A9D8F","#E9C46A","#457B9D"];
+var types=["benefit","benefit","benefit","benefit"];
+var sl=[35,30,20,15];
+var checked=false,step=0;
+var titles=["1. Kasus","2. Tipe kriteria","3. Normalisasi","4. Bobot dan peringkat","5. Latihan"];
+
+function norm(){
+  return X.map(function(row){return row.map(function(x,j){
+    var col=X.map(function(r){return r[j]});
+    return types[j]==="benefit"?x/Math.max.apply(null,col):Math.min.apply(null,col)/x;});});
+}
+function weights(){var s=sl.reduce(function(a,b){return a+b},0)||1;return sl.map(function(v){return v/s});}
+function scores(){
+  var R=norm(),w=weights();
+  return R.map(function(r){var c=r.map(function(v,j){return v*w[j]});return {c:c,v:c.reduce(function(a,b){return a+b},0)};});
+}
+function f3(n){return n.toFixed(3).replace(".",",")}
+function esc(s){return s}
+
+function renderSteps(){
+  var el=document.getElementById("steps");el.innerHTML="";
+  titles.forEach(function(t,i){var b=document.createElement("button");b.textContent=t;if(i===step)b.className="on";
+    b.onclick=function(){step=i;render();};el.appendChild(b);});
+}
+function tableX(){
+  var h="<div class=\"scroll\"><table><tr><th>Alternatif</th>"+crit.map(function(c,j){return "<th>C"+(j+1)+"<br><span class=\"note\">"+c+"</span></th>"}).join("")+"</tr>";
+  X.forEach(function(r,i){h+="<tr><td>"+names[i]+"</td>"+r.map(function(x){return "<td>"+x+"</td>"}).join("")+"</tr>"});
+  return h+"</table></div>";
+}
+function render(){
+  renderSteps();
+  var p=document.getElementById("panel"),h="";
+  if(step===0){
+    h="<h3>Latar cerita</h3><p>Anda analis di sebuah kedai kopi UMKM di Bandung. Pemilik berkata: <em>“Modal kami terbatas, tetapi pelanggan peduli rasa. Kopi juga harus tiba cepat supaya stok tidak habis.”</em> Pilih satu dari empat supplier dan buat rekomendasi yang bisa dipertanggungjawabkan.</p><h3>Matriks keputusan (X)</h3>"+tableX()+"<p class=\"note\">Data ini rekaan untuk latihan. Pada kasus nyata, nilai berasal dari penawaran supplier, uji sampel, atau kuesioner.</p><p><strong>Pertanyaan pemantik:</strong> jika hanya melihat harga, supplier mana yang Anda pilih? Apakah itu keputusan terbaik?</p>";
+  }else if(step===1){
+    h="<h3>Tentukan tipe tiap kriteria</h3><p>Tanyakan: <em>apakah nilai yang lebih besar membuat alternatif lebih diinginkan?</em> Ya berarti <strong>Benefit</strong>, tidak berarti <strong>Cost</strong>.</p>";
+    crit.forEach(function(c,j){
+      h+="<div class=\"row\"><div>C"+(j+1)+" · "+c+"</div><div class=\"seg\"><button data-j=\""+j+"\" data-t=\"benefit\" class=\""+(types[j]==="benefit"?"on":"")+"\">Benefit</button><button data-j=\""+j+"\" data-t=\"cost\" class=\""+(types[j]==="cost"?"on":"")+"\">Cost</button></div></div>";
+      if(checked){var ok=types[j]===key[j];h+="<p class=\"fb "+(ok?"ok":"bad")+"\">"+(ok?"Tepat. ":"Belum tepat. ")+hints[j]+"</p>";}
+    });
+    h+="<p><button class=\"btn\" id=\"chk\">Periksa jawaban</button></p><p class=\"note\">Pilihan Anda dipakai pada langkah normalisasi dan langsung memengaruhi menara 3D.</p>";
+  }else if(step===2){
+    var R=norm();
+    h="<h3>Normalisasi matriks (IP-5)</h3><p class=\"mono\">Benefit: r = x / max(x)<br>Cost: r = min(x) / x</p>";
+    var wrong=types.some(function(t,j){return t!==key[j]});
+    if(wrong)h+="<p class=\"fb bad\">Perhatian: ada tipe kriteria yang belum sesuai arah preferensi, sehingga hasil di bawah ikut keliru. Kembali ke langkah 2 untuk memeriksanya.</p>";
+    h+="<div class=\"scroll\"><table><tr><th>Alternatif</th>"+crit.map(function(c,j){return "<th>C"+(j+1)+" ("+types[j]+")</th>"}).join("")+"</tr>";
+    R.forEach(function(r,i){h+="<tr><td>"+names[i]+"</td>"+r.map(function(v){return "<td>"+f3(v)+"</td>"}).join("")+"</tr>"});
+    h+="</table></div><p class=\"note\">Setelah normalisasi, semua nilai berada di rentang 0 sampai 1 dan siap dibobot. Nilai 1 berarti terbaik pada kriteria itu.</p>";
+  }else if(step===3){
+    var w=weights(),S=scores();
+    h="<h3>Bobot dan nilai preferensi (IP-6)</h3><p class=\"mono\">Vi = Σ (wj × rij)</p><p class=\"note\">Geser slider. Bobot otomatis dinormalisasi sehingga totalnya 1. Pada SAW, bobot adalah masukan dari pengambil keputusan.</p>";
+    crit.forEach(function(c,j){h+="<div><label>C"+(j+1)+" "+c+": <strong>"+f3(w[j])+"</strong></label><input type=\"range\" min=\"1\" max=\"100\" value=\""+sl[j]+"\" data-w=\""+j+"\"></div>";});
+    var order=S.map(function(s,i){return {i:i,v:s.v}}).sort(function(a,b){return b.v-a.v});
+    h+="<table><tr><th>Peringkat</th><th>Alternatif</th><th>V</th></tr>";
+    order.forEach(function(o,k){h+="<tr><td>"+(k+1)+"</td><td>"+names[o.i]+"</td><td>"+f3(o.v)+"</td></tr>"});
+    h+="</table><p class=\"note\">Coba bobot harga rendah dan kualitas tinggi. Perhatikan bagaimana peringkat berubah: bobot menentukan hasil, jadi harus dapat dipertanggungjawabkan.</p>";
+  }else{
+    h="<h3>Latihan</h3><p>1. Dengan Waktu kirim sebagai <strong>Cost</strong>, hitung nilai ternormalisasi A2 pada C3 (waktu 5 hari, tercepat 2 hari).</p><p><input type=\"number\" step=\"0.001\" id=\"q1\" placeholder=\"mis. 0.500\"> <button class=\"btn\" id=\"b1\">Periksa</button></p><p class=\"fb\" id=\"f1\"></p><p>2. Menurut bobot di langkah 4 saat ini, supplier mana peringkat 1?</p><p><select id=\"q2\"><option value=\"\">Pilih</option>"+names.map(function(n,i){return "<option value=\""+i+"\">"+n+"</option>"}).join("")+"</select> <button class=\"btn\" id=\"b2\">Periksa</button></p><p class=\"fb\" id=\"f2\"></p><p>3. Tulis rekomendasi singkat untuk pemilik kedai, termasuk alasan Anda memilih bobot tertentu.</p><textarea placeholder=\"Rekomendasi saya…\"></textarea><p class=\"note\">Jawaban tidak disimpan. Salin ke dokumen Anda bila perlu.</p>";
+  }
+  p.innerHTML=h;bind();updateTowers();
+}
+function bind(){
+  document.querySelectorAll("[data-t]").forEach(function(b){b.onclick=function(){types[+b.dataset.j]=b.dataset.t;checked=false;render();};});
+  var c=document.getElementById("chk");if(c)c.onclick=function(){checked=true;render();};
+  document.querySelectorAll("[data-w]").forEach(function(r){r.oninput=function(){sl[+r.dataset.w]=+r.value;var y=window.scrollY;render();window.scrollTo(0,y);};});
+  var b1=document.getElementById("b1");if(b1)b1.onclick=function(){
+    var v=parseFloat(document.getElementById("q1").value.replace(",","."));var f=document.getElementById("f1");
+    if(isNaN(v)){f.className="fb bad";f.textContent="Masukkan angka dahulu.";}
+    else if(Math.abs(v-0.4)<0.006){f.className="fb ok";f.textContent="Tepat. r = min/x = 2/5 = 0,400.";}
+    else{f.className="fb bad";f.textContent="Belum tepat. Untuk cost, pakai rumus min(x) / x, bukan x / max(x).";}};
+  var b2=document.getElementById("b2");if(b2)b2.onclick=function(){
+    var s=scores(),best=0;s.forEach(function(o,i){if(o.v>s[best].v)best=i;});
+    var sel=document.getElementById("q2").value,f=document.getElementById("f2");
+    if(sel===""){f.className="fb bad";f.textContent="Pilih salah satu.";}
+    else if(+sel===best){f.className="fb ok";f.textContent="Tepat. "+names[best]+" memiliki V tertinggi ("+f3(s[best].v)+").";}
+    else{f.className="fb bad";f.textContent="Belum tepat. Buka langkah 4 dan baca tabel peringkat.";}};
+}
+
+var scene,camera,renderer,groups=[],targets=[],theta=0.7,drag=false,lastX=0;
+function label(text){
+  var c=document.createElement("canvas");c.width=256;c.height=64;var g=c.getContext("2d");
+  g.font="bold 28px sans-serif";g.fillStyle="#8a92a3";g.textAlign="center";g.fillText(text,128,40);
+  var t=new THREE.CanvasTexture(c);var s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true}));
+  s.scale.set(2.4,0.6,1);return s;
+}
+function initScene(){
+  var st=document.getElementById("stage");
+  if(typeof THREE==="undefined"){st.innerHTML="<p style=\"padding:16px\">Pustaka 3D tidak dapat dimuat. Periksa koneksi internet.</p>";return;}
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(45,st.clientWidth/st.clientHeight,0.1,100);
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.setSize(st.clientWidth,st.clientHeight);st.appendChild(renderer.domElement);
+  scene.add(new THREE.AmbientLight(0xffffff,0.75));
+  var d=new THREE.DirectionalLight(0xffffff,0.7);d.position.set(5,10,6);scene.add(d);
+  var floor=new THREE.Mesh(new THREE.BoxGeometry(9,0.1,3.2),new THREE.MeshStandardMaterial({color:0x8a92a3,transparent:true,opacity:0.25}));
+  floor.position.y=-0.05;scene.add(floor);
+  for(var i=0;i<4;i++){
+    var g=new THREE.Group();g.position.x=(i-1.5)*2.1;g.userData.parts=[];
+    for(var j=0;j<4;j++){
+      var m=new THREE.Mesh(new THREE.BoxGeometry(1.2,1,1.2),new THREE.MeshStandardMaterial({color:colors[j]}));
+      g.add(m);g.userData.parts.push(m);
+    }
+    var l=label("A"+(i+1));l.position.set(0,-0.55,1.4);g.add(l);
+    scene.add(g);groups.push(g);targets.push([0,0,0,0]);
+  }
+  var st2=st;
+  st2.addEventListener("pointerdown",function(e){drag=true;lastX=e.clientX;st2.style.cursor="grabbing";});
+  window.addEventListener("pointerup",function(){drag=false;st2.style.cursor="grab";});
+  window.addEventListener("pointermove",function(e){if(drag){theta+=(e.clientX-lastX)*0.008;lastX=e.clientX;}});
+  window.addEventListener("resize",function(){camera.aspect=st.clientWidth/st.clientHeight;camera.updateProjectionMatrix();renderer.setSize(st.clientWidth,st.clientHeight);});
+  document.getElementById("legend").innerHTML=crit.map(function(c,j){return "<span><i class=\"sw\" style=\"background:"+colors[j]+"\"></i>C"+(j+1)+" "+c.split(" (")[0]+"</span>"}).join("");
+  loop();
+}
+var SC=6;
+function updateTowers(){
+  if(!renderer)return;
+  var S=scores();
+  S.forEach(function(s,i){targets[i]=s.c.map(function(v){return v*SC});});
+}
+function loop(){
+  requestAnimationFrame(loop);
+  groups.forEach(function(g,i){
+    var y=0;
+    g.userData.parts.forEach(function(m,j){
+      var cur=m.scale.y,tg=Math.max(targets[i][j],0.001);
+      cur+=(tg-cur)*0.12;m.scale.y=cur;m.position.y=y+cur/2;y+=cur;
+    });
+  });
+  camera.position.set(Math.sin(theta)*10,5.5,Math.cos(theta)*10);camera.lookAt(0,1.8,0);
+  renderer.render(scene,camera);
+}
+initScene();render();
+</script>
+</body>
+</html>
